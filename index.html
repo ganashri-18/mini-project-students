@@ -1,0 +1,519 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Attendance Management System</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+header {
+    background: #1e3a8a;
+    color: white;
+    text-align: center;
+    padding: 25px 15px;
+}
+
+header h1 {
+    margin: 0 0 10px;
+}
+
+main {
+    max-width: 1000px;
+    margin: 25px auto;
+    padding: 15px;
+}
+
+.panel, .card {
+    background: white;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px #00000010;
+}
+
+input, button, select {
+    padding: 11px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    font-size: 14px;
+}
+
+input, select {
+    max-width: 100%;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    font-weight: bold;
+}
+
+.primary {
+    background: #2563eb;
+    color: white;
+}
+
+.present {
+    background: #16a34a;
+    color: white;
+}
+
+.absent {
+    background: #dc2626;
+    color: white;
+}
+
+.remove {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.form-row input {
+    flex: 1;
+    min-width: 180px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.card {
+    text-align: center;
+}
+
+.card h2 {
+    margin-bottom: 0;
+    color: #2563eb;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.controls input {
+    flex: 1;
+    min-width: 150px;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+}
+
+th {
+    background: #eff6ff;
+}
+
+.status-present {
+    color: #15803d;
+    font-weight: bold;
+}
+
+.status-absent {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+.status-unmarked {
+    color: #64748b;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    color: #64748b;
+}
+
+@media (max-width: 650px) {
+    .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🎓 Student Attendance System</h1>
+    <p>Digital solution for manual attendance management</p>
+</header>
+
+<main>
+
+    <section class="stats">
+        <div class="card">
+            <p>Total Students</p>
+            <h2 id="total">0</h2>
+        </div>
+        <div class="card">
+            <p>Present</p>
+            <h2 id="presentCount">0</h2>
+        </div>
+        <div class="card">
+            <p>Absent</p>
+            <h2 id="absentCount">0</h2>
+        </div>
+        <div class="card">
+            <p>Attendance Rate</p>
+            <h2 id="rate">0%</h2>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Add Student</h2>
+        <form id="studentForm" class="form-row">
+            <input id="regNo" placeholder="Register Number" required>
+            <input id="studentName" placeholder="Student Name" required>
+            <button class="primary" type="submit">Add Student</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>Mark Attendance</h2>
+
+        <div class="controls">
+            <input type="date" id="date">
+            <input type="search" id="search"
+                   placeholder="Search student...">
+            <button class="primary" id="download">
+                Download CSV
+            </button>
+        </div>
+
+        <div class="controls">
+            <button class="present" id="allPresent">
+                Mark All Present
+            </button>
+            <button class="absent" id="allAbsent">
+                Mark All Absent
+            </button>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Register No.</th>
+                        <th>Student Name</th>
+                        <th>Status</th>
+                        <th>Attendance</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="studentList"></tbody>
+            </table>
+            <p id="emptyMessage">No students added yet.</p>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    Student Attendance Management System | Mini Project
+</footer>
+
+<script>
+const STORAGE_KEY = "studentAttendanceSystem";
+
+let students = [];
+let attendance = {};
+
+try {
+    students = JSON.parse(
+        localStorage.getItem(STORAGE_KEY + "_students")
+    ) || [];
+
+    attendance = JSON.parse(
+        localStorage.getItem(STORAGE_KEY + "_attendance")
+    ) || {};
+} catch (error) {
+    students = [];
+    attendance = {};
+}
+
+const $ = id => document.getElementById(id);
+
+function getToday() {
+    const d = new Date();
+    return d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+}
+
+$("date").value = getToday();
+
+function saveData() {
+    localStorage.setItem(
+        STORAGE_KEY + "_students",
+        JSON.stringify(students)
+    );
+
+    localStorage.setItem(
+        STORAGE_KEY + "_attendance",
+        JSON.stringify(attendance)
+    );
+}
+
+function getRecord() {
+    const date = $("date").value || getToday();
+
+    if (!attendance[date]) {
+        attendance[date] = {};
+    }
+
+    return attendance[date];
+}
+
+function getStatus(studentId) {
+    return getRecord()[studentId] || "Unmarked";
+}
+
+function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+}
+
+function render() {
+    const record = getRecord();
+    const present = students.filter(
+        s => record[s.id] === "Present"
+    ).length;
+
+    const absent = students.filter(
+        s => record[s.id] === "Absent"
+    ).length;
+
+    const marked = present + absent;
+
+    $("total").textContent = students.length;
+    $("presentCount").textContent = present;
+    $("absentCount").textContent = absent;
+
+    $("rate").textContent = marked
+        ? Math.round(present / marked * 100) + "%"
+        : "0%";
+
+    const query = $("search").value.toLowerCase().trim();
+
+    const filtered = students.filter(s =>
+        s.name.toLowerCase().includes(query) ||
+        s.reg.toLowerCase().includes(query)
+    );
+
+    $("studentList").innerHTML = filtered.map(s => {
+        const status = getStatus(s.id);
+        let statusClass = "status-unmarked";
+
+        if (status === "Present") {
+            statusClass = "status-present";
+        } else if (status === "Absent") {
+            statusClass = "status-absent";
+        }
+
+        return `
+        <tr>
+            <td>${escapeHTML(s.reg)}</td>
+            <td>${escapeHTML(s.name)}</td>
+            <td class="${statusClass}">${status}</td>
+            <td>
+                <button class="present"
+                    data-mark="${s.id}"
+                    data-status="Present">Present</button>
+
+                <button class="absent"
+                    data-mark="${s.id}"
+                    data-status="Absent">Absent</button>
+            </td>
+            <td>
+                <button class="remove"
+                    data-remove="${s.id}">Remove</button>
+            </td>
+        </tr>`;
+    }).join("");
+
+    $("emptyMessage").style.display =
+        filtered.length ? "none" : "block";
+
+    if (students.length && !filtered.length) {
+        $("emptyMessage").textContent = "No matching students found.";
+    } else {
+        $("emptyMessage").textContent = "No students added yet.";
+    }
+}
+
+$("studentForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const reg = $("regNo").value.trim();
+    const name = $("studentName").value.trim();
+
+    if (!reg || !name) return;
+
+    const exists = students.some(
+        s => s.reg.toLowerCase() === reg.toLowerCase()
+    );
+
+    if (exists) {
+        alert("Register number already exists!");
+        return;
+    }
+
+    students.push({
+        id: Date.now().toString() +
+            Math.random().toString(36).slice(2, 7),
+        reg: reg,
+        name: name
+    });
+
+    saveData();
+    this.reset();
+    render();
+});
+
+$("studentList").addEventListener("click", function(e) {
+    const markButton = e.target.closest("[data-mark]");
+    const removeButton = e.target.closest("[data-remove]");
+
+    if (markButton) {
+        getRecord()[markButton.dataset.mark] =
+            markButton.dataset.status;
+
+        saveData();
+        render();
+    }
+
+    if (removeButton) {
+        const id = removeButton.dataset.remove;
+        const student = students.find(s => s.id === id);
+
+        if (!student || !confirm(
+            "Remove " + student.name + "?"
+        )) return;
+
+        students = students.filter(s => s.id !== id);
+
+        Object.values(attendance).forEach(record => {
+            delete record[id];
+        });
+
+        saveData();
+        render();
+    }
+});
+
+$("date").addEventListener("change", render);
+$("search").addEventListener("input", render);
+
+$("allPresent").addEventListener("click", function() {
+    if (!students.length) {
+        alert("Add students first.");
+        return;
+    }
+
+    students.forEach(s => {
+        getRecord()[s.id] = "Present";
+    });
+
+    saveData();
+    render();
+});
+
+$("allAbsent").addEventListener("click", function() {
+    if (!students.length) {
+        alert("Add students first.");
+        return;
+    }
+
+    students.forEach(s => {
+        getRecord()[s.id] = "Absent";
+    });
+
+    saveData();
+    render();
+});
+
+$("download").addEventListener("click", function() {
+    if (!students.length) {
+        alert("No student records to download.");
+        return;
+    }
+
+    const rows = [
+        ["Date", "Register Number", "Student Name", "Status"]
+    ];
+
+    students.forEach(s => {
+        rows.push([
+            $("date").value,
+            s.reg,
+            s.name,
+            getStatus(s.id)
+        ]);
+    });
+
+    const csv = rows.map(row =>
+        row.map(value =>
+            '"' + String(value).replace(/"/g, '""') + '"'
+        ).join(",")
+    ).join("\r\n");
+
+    const blob = new Blob(["\uFEFF" + csv], {
+        type: "text/csv;charset=utf-8;"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "attendance-" +
+        $("date").value + ".csv";
+
+    link.click();
+    URL.revokeObjectURL(url);
+});
+
+render();
+</script>
+
+</body>
+</html>
